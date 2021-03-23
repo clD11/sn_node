@@ -19,7 +19,7 @@ use dashmap::DashMap;
 use log::info;
 use sn_data_types::{CreditAgreementProof, CreditId, NodeAge, PublicKey, SectionElders, Token};
 use sn_messaging::{
-    client::{Message, NodeQuery, NodeSystemQuery},
+    client::{NodeQuery, NodeSystemQuery, ProcessMsg},
     Aggregation, DstLocation, MessageId, SrcLocation,
 };
 use sn_routing::XorName;

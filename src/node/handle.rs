@@ -24,7 +24,7 @@ use dashmap::DashMap;
 use log::{debug, info};
 use sn_data_types::{CreditAgreementProof, CreditId, PublicKey, SectionElders, WalletHistory};
 use sn_messaging::{
-    client::{Message, NodeCmd, NodeQuery, Query},
+    client::{NodeCmd, NodeQuery, ProcessMsg, Query},
     Aggregation, DstLocation, MessageId,
 };
 use std::collections::{BTreeMap, VecDeque};
@@ -263,13 +263,12 @@ impl Node {
                     Ok(ops)
                 } else {
                     Ok(vec![NodeDuty::Send(OutgoingMsg {
-                        msg: Message::NodeQuery {
+                        msg: ProcessMsg::NodeQuery {
                             query: NodeQuery::Chunks {
                                 query: read,
                                 origin,
                             },
                             id: msg_id,
-                            target_section_pk: None,
                         },
                         dst: DstLocation::Section(data_section_addr),
                         // TBD
@@ -323,10 +322,9 @@ impl Node {
                     Ok(vec![meta_data.read(query, id, origin).await?])
                 } else {
                     Ok(vec![NodeDuty::Send(OutgoingMsg {
-                        msg: Message::NodeQuery {
+                        msg: ProcessMsg::NodeQuery {
                             query: NodeQuery::Metadata { query, origin },
                             id,
-                            target_section_pk: None,
                         },
                         dst: DstLocation::Section(data_section_addr),
                         // TBD

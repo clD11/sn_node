@@ -31,7 +31,7 @@ use futures::lock::Mutex;
 use hex_fmt::HexFmt;
 use log::{debug, error, info, trace, warn};
 use sn_data_types::{ActorHistory, PublicKey, TransferPropagated, WalletHistory};
-use sn_messaging::{client::Message, DstLocation, SrcLocation};
+use sn_messaging::{client::ProcessMsg, DstLocation, SrcLocation};
 use sn_routing::{Event as RoutingEvent, EventStream, NodeElderChange, MIN_AGE};
 use sn_routing::{Prefix, XorName, ELDER_SIZE as GENESIS_ELDER_COUNT};
 use sn_transfers::{TransferActor, Wallet};

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use bls::PublicKeySet;
+use bls::{PublicKey as BlsPublicKey, PublicKeySet};
 #[cfg(feature = "simulated-payouts")]
 use sn_data_types::Transfer;
 use sn_data_types::{
@@ -16,7 +16,7 @@ use sn_data_types::{
     WalletHistory,
 };
 use sn_messaging::{
-    client::{BlobRead, BlobWrite, Message, NodeSystemCmd},
+    client::{BlobRead, BlobWrite, NodeSystemCmd, ProcessMsg},
     Aggregation, DstLocation, EndUser, MessageId, SrcLocation,
 };
 use sn_routing::{NodeElderChange, Prefix};
@@ -174,7 +174,7 @@ pub enum NodeDuty {
     /// Send the same request to each individual node.
     SendToNodes {
         targets: BTreeSet<XorName>,
-        msg: Message,
+        msg: ProcessMsg,
     },
     /// Process read of data
     ProcessRead {
@@ -190,7 +190,7 @@ pub enum NodeDuty {
     },
     /// Process Payment for a DataCmd
     ProcessDataPayment {
-        msg: Message,
+        msg: ProcessMsg,
         origin: EndUser,
     },
     /// Process replication of a chunk on `MemberLeft`
@@ -278,7 +278,7 @@ impl Debug for NodeDuty {
 
 #[derive(Debug, Clone)]
 pub struct OutgoingMsg {
-    pub msg: Message,
+    pub msg: ProcessMsg,
     pub dst: DstLocation,
     pub section_source: bool,
     pub aggregation: Aggregation,

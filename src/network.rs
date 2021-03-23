@@ -17,7 +17,7 @@ use bls::{PublicKeySet, PublicKeyShare as BlsPublicKeyShare};
 use log::{debug, error};
 use serde::Serialize;
 use sn_data_types::{Error as DtError, PublicKey, Result as DtResult, Signature, SignatureShare};
-use sn_messaging::{client::Message, Aggregation, DstLocation, Itinerary, SrcLocation};
+use sn_messaging::{client::ProcessMsg, Aggregation, DstLocation, Itinerary, SrcLocation};
 use sn_routing::{
     Config as RoutingConfig, Error as RoutingError, EventStream, Routing as RoutingNode,
     SectionChain,
@@ -199,6 +199,11 @@ impl Network {
     pub async fn our_index(&self) -> Result<usize> {
         self.routing.our_index().await.map_err(Error::Routing)
     }
+
+    // /// BLS key index in routing for key shares
+    // pub async fn get_section_elders(&self, name: &XorName) -> Result<usize> {
+    //     self.routing.get
+    // }
 
     pub async fn our_elder_names(&self) -> BTreeSet<XorName> {
         self.routing

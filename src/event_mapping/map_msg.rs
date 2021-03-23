@@ -18,14 +18,15 @@ use sn_messaging::{
     client::{
         Cmd, Message, NodeCmd, NodeDataQueryResponse, NodeEvent, NodeQuery, NodeQueryResponse,
         NodeRewardQuery, NodeSystemCmd, NodeSystemQuery, NodeSystemQueryResponse, NodeTransferCmd,
-        NodeTransferQuery, NodeTransferQueryResponse, Query, TransferCmd, TransferQuery,
+        NodeTransferQuery, NodeTransferQueryResponse, ProcessMsg, Query, TransferCmd,
+        TransferQuery,
     },
     DstLocation, EndUser, SrcLocation,
 };
 
-pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> Mapping {
+pub fn match_user_sent_msg(msg: ProcessMsg, dst: DstLocation, origin: EndUser) -> Mapping {
     match msg.to_owned() {
-        Message::Query {
+        ProcessMsg::Query {
             query: Query::Data(query),
             id,
             ..
@@ -36,7 +37,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
                 src: SrcLocation::EndUser(origin),
             }),
         },
-        Message::Cmd {
+        ProcessMsg::Cmd {
             cmd: Cmd::Data { .. },
             id,
             ..
@@ -50,7 +51,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
                 src: SrcLocation::EndUser(origin),
             }),
         },
-        Message::Cmd {
+        ProcessMsg::Cmd {
             cmd: Cmd::Transfer(TransferCmd::ValidateTransfer(signed_transfer)),
             id,
             ..
@@ -66,7 +67,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
             }),
         },
         // TODO: Map more transfer cmds
-        Message::Cmd {
+        ProcessMsg::Cmd {
             cmd: Cmd::Transfer(TransferCmd::SimulatePayout(transfer)),
             id,
             ..
@@ -81,7 +82,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
                 src: SrcLocation::EndUser(origin),
             }),
         },
-        Message::Cmd {
+        ProcessMsg::Cmd {
             cmd: Cmd::Transfer(TransferCmd::RegisterTransfer(proof)),
             id,
             ..
@@ -93,7 +94,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
             }),
         },
         // TODO: Map more transfer queries
-        Message::Query {
+        ProcessMsg::Query {
             query: Query::Transfer(TransferQuery::GetHistory { at, since_version }),
             id,
             ..
@@ -109,7 +110,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
                 src: SrcLocation::EndUser(origin),
             }),
         },
-        Message::Query {
+        ProcessMsg::Query {
             query: Query::Transfer(TransferQuery::GetBalance(at)),
             id,
             ..
@@ -124,7 +125,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
                 src: SrcLocation::EndUser(origin),
             }),
         },
-        Message::Query {
+        ProcessMsg::Query {
             query: Query::Transfer(TransferQuery::GetStoreCost { requester, bytes }),
             id,
             ..
@@ -150,7 +151,7 @@ pub fn match_user_sent_msg(msg: Message, dst: DstLocation, origin: EndUser) -> M
     }
 }
 
-pub fn map_node_msg(msg: Message, src: SrcLocation, dst: DstLocation) -> Mapping {
+pub fn map_node_msg(msg: ProcessMsg, src: SrcLocation, dst: DstLocation) -> Mapping {
     //debug!(">>>>>>>>>>>> Evaluating received msg. {:?}.", msg);
     match &dst {
         DstLocation::Section(_name) | DstLocation::Node(_name) => match_or_err(msg, src),
@@ -161,7 +162,7 @@ pub fn map_node_msg(msg: Message, src: SrcLocation, dst: DstLocation) -> Mapping
     }
 }
 
-fn match_or_err(msg: Message, src: SrcLocation) -> Mapping {
+fn match_or_err(msg: ProcessMsg, src: SrcLocation) -> Mapping {
     match match_section_msg(msg.clone(), src) {
         NodeDuty::NoOp => match match_node_msg(msg.clone(), src) {
             NodeDuty::NoOp => Mapping::Error(LazyError {
@@ -180,10 +181,10 @@ fn match_or_err(msg: Message, src: SrcLocation) -> Mapping {
     }
 }
 
-fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
+fn match_section_msg(msg: ProcessMsg, origin: SrcLocation) -> NodeDuty {
     match &msg {
         // ------ wallet register ------
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd: NodeCmd::System(NodeSystemCmd::RegisterWallet(wallet)),
             id,
             ..
@@ -194,7 +195,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             origin,
         },
         // Churn synch
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd:
                 NodeCmd::System(NodeSystemCmd::ReceiveExistingData {
                     node_rewards,
@@ -225,7 +226,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
         },
         //
         // ------ transfers --------
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd: NodeCmd::Transfers(NodeTransferCmd::PropagateTransfer(proof)),
             id,
             ..
@@ -235,7 +236,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             origin,
         },
         // ------ metadata ------
-        Message::NodeQuery {
+        ProcessMsg::NodeQuery {
             query: NodeQuery::Metadata { query, origin },
             id,
             ..
@@ -244,7 +245,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             id: *id,
             origin: *origin,
         },
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd: NodeCmd::Metadata { cmd, origin },
             id,
             ..
@@ -255,7 +256,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
         },
         //
         // ------ adult ------
-        Message::NodeQuery {
+        ProcessMsg::NodeQuery {
             query: NodeQuery::Chunks { query, origin },
             id,
             ..
@@ -264,7 +265,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             msg_id: *id,
             origin: *origin,
         },
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd: NodeCmd::Chunks { cmd, origin },
             id,
             ..
@@ -275,7 +276,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
         },
         //
         // ------ chunk replication ------
-        Message::NodeQuery {
+        ProcessMsg::NodeQuery {
             query:
                 NodeQuery::System(NodeSystemQuery::GetChunk {
                     new_holder,
@@ -290,7 +291,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             id: *id,
         },
         // this cmd is accumulated, thus has authority
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd:
                 NodeCmd::System(NodeSystemCmd::ReplicateChunk {
                     address,
@@ -305,7 +306,7 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             id: *id,
         },
         // Aggregated by us, for security
-        Message::NodeQuery {
+        ProcessMsg::NodeQuery {
             query: NodeQuery::System(NodeSystemQuery::GetSectionElders),
             id,
             ..
@@ -317,17 +318,17 @@ fn match_section_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
     }
 }
 
-fn match_node_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
+fn match_node_msg(msg: ProcessMsg, origin: SrcLocation) -> NodeDuty {
     match &msg {
         //
         // ------ system cmd ------
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd: NodeCmd::System(NodeSystemCmd::StorageFull { node_id, .. }),
             ..
         } => NodeDuty::IncrementFullNodeCount { node_id: *node_id },
         // ------ chunk replication ------
         // query response from adult cannot be accumulated
-        Message::NodeQueryResponse {
+        ProcessMsg::NodeQueryResponse {
             response: NodeQueryResponse::Data(NodeDataQueryResponse::GetChunk(result)),
             correlation_id,
             ..
@@ -345,7 +346,7 @@ fn match_node_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
         }
         //
         // ------ transfers ------
-        Message::NodeQuery {
+        ProcessMsg::NodeQuery {
             query: NodeQuery::Transfers(NodeTransferQuery::GetReplicaEvents),
             id,
             ..
@@ -354,7 +355,7 @@ fn match_node_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             origin,
         },
         // --- Adult ---
-        Message::NodeQuery {
+        ProcessMsg::NodeQuery {
             query: NodeQuery::Chunks { query, origin },
             id,
             ..
@@ -363,7 +364,7 @@ fn match_node_msg(msg: Message, origin: SrcLocation) -> NodeDuty {
             msg_id: *id,
             origin: *origin,
         },
-        Message::NodeCmd {
+        ProcessMsg::NodeCmd {
             cmd: NodeCmd::Chunks { cmd, origin },
             id,
             ..

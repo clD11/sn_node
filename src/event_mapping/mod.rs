@@ -9,12 +9,16 @@
 mod map_msg;
 
 use super::node_ops::{NodeDuties, NodeDuty};
-use crate::{Network, Result};
+use crate::{Error, Network, Result};
+use futures::future::Lazy;
 use hex_fmt::HexFmt;
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use map_msg::{map_node_msg, match_user_sent_msg};
-use sn_data_types::PublicKey;
-use sn_messaging::{client::Message, DstLocation, SrcLocation};
+use sn_data_types::{Msg, PublicKey};
+use sn_messaging::{
+    client::{Message, ProcessMsg, ProcessingError},
+    DstLocation, SrcLocation,
+};
 use sn_routing::{Event as RoutingEvent, EventStream, NodeElderChange, MIN_AGE};
 use sn_routing::{Prefix, XorName, ELDER_SIZE as GENESIS_ELDER_COUNT};
 use std::collections::HashSet;
@@ -31,14 +35,24 @@ pub enum Mapping {
 
 #[derive(Debug, Clone)]
 pub enum MsgContext {
-    Msg { msg: Message, src: SrcLocation },
-    Bytes { msg: bytes::Bytes, src: SrcLocation },
+    Msg {
+        msg: ProcessMsg,
+        src: SrcLocation,
+    },
+    Error {
+        msg: ProcessingError,
+        src: SrcLocation,
+    },
+    Bytes {
+        msg: bytes::Bytes,
+        src: SrcLocation,
+    },
 }
 
 #[derive(Debug)]
 pub struct LazyError {
     pub msg: MsgContext,
-    pub error: crate::Error,
+    pub error: Error,
 }
 
 /// Process any routing event
@@ -58,13 +72,37 @@ pub async fn map_routing_event(event: RoutingEvent, network_api: &Network) -> Ma
                 }
             };
 
-            map_node_msg(msg, src, dst)
+            match msg {
+                Message::Process(process_msg) => map_node_msg(process_msg, src, dst),
+                Message::ProcessingError(error) => {
+                    warn!("TODO: Processing error received. This should be handled via the LazyMessaging pattern");
+                    Mapping::Error(LazyError {
+                        msg: MsgContext::Error {
+                            msg: error.clone(),
+                            src,
+                        },
+                        error: Error::ProcessingError(error),
+                    })
+                }
+            }
         }
-        RoutingEvent::ClientMessageReceived { msg, user } => match_user_sent_msg(
-            *msg.clone(),
-            DstLocation::Node(network_api.our_name().await),
-            user,
-        ),
+        RoutingEvent::ClientMessageReceived { msg, user } => match *msg {
+            Message::Process(process_msg) => match_user_sent_msg(
+                process_msg,
+                DstLocation::Node(network_api.our_name().await),
+                user,
+            ),
+            Message::ProcessingError(error) => {
+                warn!("TODO: Processing error received. This should be handled via the LazyMessaging pattern");
+                Mapping::Error(LazyError {
+                    msg: MsgContext::Error {
+                        msg: error.clone(),
+                        src: SrcLocation::EndUser(user),
+                    },
+                    error: Error::ProcessingError(error),
+                })
+            }
+        },
         RoutingEvent::EldersChanged {
             prefix,
             key,

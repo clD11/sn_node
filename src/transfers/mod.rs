@@ -36,9 +36,9 @@ use sn_data_types::{
 };
 use sn_messaging::{
     client::{
-        Cmd, CmdError, Error as ErrorMessage, Event, Message, NodeCmd, NodeCmdError, NodeEvent,
+        Cmd, CmdError, Error as ErrorMessage, Event, NodeCmd, NodeCmdError, NodeEvent,
         NodeQueryResponse, NodeTransferCmd, NodeTransferError, NodeTransferQueryResponse,
-        QueryResponse, TransferError,
+        ProcessMsg, QueryResponse, TransferError,
     },
     Aggregation, DstLocation, EndUser, MessageId, SrcLocation,
 };
@@ -137,18 +137,16 @@ impl Transfers {
     ) -> NodeDuties {
         let result = self.rate_limit.from(bytes).await;
         info!("StoreCost for {:?} bytes: {}", bytes, result);
-        let response = NodeDuty::Send(OutgoingMsg {
-            msg: Message::QueryResponse {
+        vec![NodeDuty::Send(OutgoingMsg {
+            msg: ProcessMsg::QueryResponse {
                 response: QueryResponse::GetStoreCost(Ok(result)),
                 id: MessageId::in_response_to(&msg_id),
                 correlation_id: msg_id,
-                target_section_pk: None,
             },
             section_source: false, // strictly this is not correct, but we don't expect responses to a response..
             dst: origin.to_dst(),
-            aggregation: Aggregation::None, // TODO: to_be_aggregated: Aggregation::AtDestination,
-        });
-        vec![response]
+            aggregation: Aggregation::AtDestination,
+        })]
     }
 
     ///
@@ -167,10 +165,10 @@ impl Transfers {
     /// Makes sure the payment contained
     /// within a data write, is credited
     /// to the section funds.
-    pub async fn process_payment(&self, msg: &Message, origin: EndUser) -> Result<NodeDuties> {
+    pub async fn process_payment(&self, msg: &ProcessMsg, origin: EndUser) -> Result<NodeDuties> {
         debug!(">>>> processing payment");
         let (payment, data_cmd, num_bytes, dst_address) = match &msg {
-            Message::Cmd {
+            ProcessMsg::Cmd {
                 cmd: Cmd::Data { payment, cmd },
                 ..
             } => (
@@ -193,18 +191,17 @@ impl Transfers {
             warn!("Payment: recipient is not section");
             let origin = SrcLocation::EndUser(EndUser::AllClients(payment.sender()));
             return Ok(vec![NodeDuty::Send(OutgoingMsg {
-                msg: Message::CmdError {
+                msg: ProcessMsg::CmdError {
                     error: CmdError::Transfer(TransferRegistration(ErrorMessage::NoSuchRecipient)),
                     id: MessageId::in_response_to(&msg.id()),
                     correlation_id: msg.id(),
-                    target_section_pk: None,
                 },
                 section_source: false, // strictly this is not correct, but we don't expect responses to a response..
                 dst: origin.to_dst(),
                 aggregation: Aggregation::None, // TODO: to_be_aggregated: Aggregation::AtDestination,
             })]);
         }
-        let registration = self.replicas.register(&payment).await;
+        let registration = self.replicas.register(payment).await;
         let result = match registration {
             Ok(_) => match self
                 .replicas
@@ -236,13 +233,12 @@ impl Transfers {
                     // todo, better error, like `TooLowPayment`
                     let origin = SrcLocation::EndUser(EndUser::AllClients(payment.sender()));
                     ops.push(NodeDuty::Send(OutgoingMsg {
-                        msg: Message::CmdError {
+                        msg: ProcessMsg::CmdError {
                             error: CmdError::Transfer(TransferRegistration(
                                 ErrorMessage::InsufficientBalance,
                             )),
                             id: MessageId::in_response_to(&msg.id()),
                             correlation_id: msg.id(),
-                            target_section_pk: None,
                         },
                         section_source: false, // strictly this is not correct, but we don't expect responses to a response..
                         dst: origin.to_dst(),
@@ -254,13 +250,12 @@ impl Transfers {
                 // consider having the section actor be
                 // informed of this transfer as well..
                 ops.push(NodeDuty::Send(OutgoingMsg {
-                    msg: Message::NodeCmd {
+                    msg: ProcessMsg::NodeCmd {
                         cmd: NodeCmd::Metadata {
                             cmd: data_cmd.clone(),
                             origin,
                         },
                         id: MessageId::in_response_to(&msg.id()),
-                        target_section_pk: None,
                     },
                     section_source: true, // i.e. errors go to our section
                     dst: DstLocation::Section(dst_address),
@@ -272,13 +267,12 @@ impl Transfers {
                 warn!("Payment: registration or propagation failed: {:?}", e);
                 let origin = SrcLocation::EndUser(EndUser::AllClients(payment.sender()));
                 Ok(vec![NodeDuty::Send(OutgoingMsg {
-                    msg: Message::CmdError {
+                    msg: ProcessMsg::CmdError {
                         error: CmdError::Transfer(TransferRegistration(
                             ErrorMessage::PaymentFailed,
                         )),
                         id: MessageId::in_response_to(&msg.id()),
                         correlation_id: msg.id(),
-                        target_section_pk: None,
                     },
                     section_source: false, // strictly this is not correct, but we don't expect responses to an error..
                     dst: origin.to_dst(),
@@ -306,11 +300,10 @@ impl Transfers {
         use NodeQueryResponse::*;
         use NodeTransferQueryResponse::*;
         Ok(NodeDuty::Send(OutgoingMsg {
-            msg: Message::NodeQueryResponse {
+            msg: ProcessMsg::NodeQueryResponse {
                 response: Transfers(GetReplicaEvents(result)),
                 id: MessageId::in_response_to(&msg_id),
                 correlation_id: msg_id,
-                target_section_pk: None,
             },
             section_source: false, // strictly this is not correct, but we don't expect responses to a response..
             dst: query_origin.to_dst(),
@@ -333,11 +326,10 @@ impl Transfers {
         };
 
         Ok(NodeDuty::Send(OutgoingMsg {
-            msg: Message::QueryResponse {
+            msg: ProcessMsg::QueryResponse {
                 response: QueryResponse::GetBalance(result),
                 id: MessageId::in_response_to(&msg_id),
                 correlation_id: msg_id,
-                target_section_pk: None,
             },
             section_source: false, // strictly this is not correct, but we don't expect responses to a response..
             dst: origin.to_dst(),
@@ -359,11 +351,10 @@ impl Transfers {
             .map_err(|_e| ErrorMessage::NoHistoryForPublicKey(*wallet_id));
 
         Ok(NodeDuty::Send(OutgoingMsg {
-            msg: Message::QueryResponse {
+            msg: ProcessMsg::QueryResponse {
                 response: QueryResponse::GetHistory(result),
                 id: MessageId::in_response_to(&msg_id),
                 correlation_id: msg_id,
-                target_section_pk: None,
             },
             section_source: false, // strictly this is not correct, but we don't expect responses to a response..
             dst: origin.to_dst(),
@@ -383,11 +374,10 @@ impl Transfers {
         debug!("Validating a transfer from msg_id: {:?}", msg_id);
         match self.replicas.validate(transfer).await {
             Ok(event) => Ok(NodeDuty::Send(OutgoingMsg {
-                msg: Message::Event {
+                msg: ProcessMsg::Event {
                     event: Event::TransferValidated { event },
                     id: MessageId::new(),
                     correlation_id: msg_id,
-                    target_section_pk: None,
                 },
                 section_source: false, // strictly this is not correct, but we don't expect responses to an event..
                 dst: origin.to_dst(),
@@ -396,11 +386,10 @@ impl Transfers {
             Err(e) => {
                 let message_error = convert_to_error_message(e)?;
                 Ok(NodeDuty::Send(OutgoingMsg {
-                    msg: Message::CmdError {
+                    msg: ProcessMsg::CmdError {
                         id: MessageId::in_response_to(&msg_id),
                         error: CmdError::Transfer(TransferError::TransferValidation(message_error)),
                         correlation_id: msg_id,
-                        target_section_pk: None,
                     },
                     section_source: false, // strictly this is not correct, but we don't expect responses to an error..
                     dst: origin.to_dst(),
@@ -424,10 +413,9 @@ impl Transfers {
             Ok(event) => {
                 let location = event.transfer_proof.recipient().into();
                 Ok(NodeDuty::Send(OutgoingMsg {
-                    msg: Message::NodeCmd {
+                    msg: ProcessMsg::NodeCmd {
                         cmd: Transfers(PropagateTransfer(event.transfer_proof.credit_proof())),
                         id: MessageId::in_response_to(&msg_id),
-                        target_section_pk: None,
                     },
                     section_source: true, // i.e. errors go to our section
                     dst: DstLocation::Section(location),
@@ -437,13 +425,12 @@ impl Transfers {
             Err(e) => {
                 let message_error = convert_to_error_message(e)?;
                 Ok(NodeDuty::Send(OutgoingMsg {
-                    msg: Message::CmdError {
+                    msg: ProcessMsg::CmdError {
                         error: CmdError::Transfer(TransferError::TransferRegistration(
                             message_error,
                         )),
                         id: MessageId::in_response_to(&msg_id),
                         correlation_id: msg_id,
-                        target_section_pk: None,
                     },
                     section_source: false, // strictly this is not correct, but we don't expect responses to an error..
                     dst: DstLocation::EndUser(EndUser::AllClients(proof.sender())),
@@ -473,21 +460,19 @@ impl Transfers {
             Ok(_) => return Ok(NodeDuty::NoOp),
             Err(Error::NetworkData(error)) => {
                 let message_error = convert_dt_error_to_error_message(error)?;
-                Message::NodeCmdError {
+                ProcessMsg::NodeCmdError {
                     error: NodeCmdError::Transfers(TransferPropagation(message_error)),
                     id: MessageId::in_response_to(&msg_id),
                     correlation_id: msg_id,
-                    target_section_pk: None,
                 }
             }
             Err(Error::UnknownSectionKey(_))
             | Err(Error::Transfer(sn_transfers::Error::SectionKeyNeverExisted)) => {
                 error!(">> UnknownSectionKey at receive_propagated");
-                Message::NodeCmdError {
+                ProcessMsg::NodeCmdError {
                     error: NodeCmdError::Transfers(TransferPropagation(ErrorMessage::NoSuchKey)),
                     id: MessageId::in_response_to(&msg_id),
                     correlation_id: msg_id,
-                    target_section_pk: None,
                 }
             }
             Err(e) => {
