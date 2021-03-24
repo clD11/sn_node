@@ -113,7 +113,7 @@ impl RewardProcess {
         for (_, credit) in proposal.rewards.clone() {
             let share = match self.signing.sign(&credit.proposal)? {
                 Signature::BlsShare(share) => share,
-                _ => return Err(Error::InvalidOperation("aarrgh".to_string())),
+                _ => return Err(Error::ChurnSignError),
             };
             proposal.add_sig(credit.id(), &share)?;
         }
@@ -134,7 +134,7 @@ impl RewardProcess {
         for (_, credit) in accumulation.rewards.clone() {
             let share = match self.signing.sign(&credit.agreed_proposal)? {
                 Signature::BlsShare(share) => share,
-                _ => return Err(Error::InvalidOperation("aarrgh".to_string())),
+                _ => return Err(Error::ChurnSignError),
             };
             accumulation.add_sig(credit.id(), &share)?;
         }

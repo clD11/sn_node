@@ -9,6 +9,7 @@
 use super::messaging::{send, send_error, send_to_nodes};
 use crate::{
     chunks::Chunks,
+    event_mapping::MsgContext,
     metadata::Metadata,
     node_ops::{NodeDuties, NodeDuty, OutgoingMsg},
     section_funds::{
@@ -21,7 +22,7 @@ use crate::{
     Error, Node, Result,
 };
 use dashmap::DashMap;
-use log::{debug, info};
+use log::{debug, info, trace};
 use sn_data_types::{CreditAgreementProof, CreditId, PublicKey, SectionElders, WalletHistory};
 use sn_messaging::{
     client::{NodeCmd, NodeQuery, ProcessMsg, Query},
@@ -32,7 +33,7 @@ use xor_name::XorName;
 
 impl Node {
     ///
-    pub async fn handle(&mut self, duty: NodeDuty) -> Result<NodeDuties> {
+    pub async fn handle(&mut self, duty: NodeDuty, ctx: &Option<MsgContext>) -> Result<NodeDuties> {
         info!("Handling NodeDuty: {:?}", duty);
         match duty {
             NodeDuty::Genesis => {
@@ -388,6 +389,22 @@ impl Node {
                     Ok(vec![])
                 }
             }
+            NodeDuty::UpdateErroringNodeSectionState => {
+                trace!("No funds section error being handled");
+
+                let is_forming_genesis = is_forming_genesis(&self.network_api).await;
+
+                if is_forming_genesis || !self.network_api.is_elder().await {
+                    trace!("Genesis not yet reached... so we ignore this");
+
+                    Ok(vec![])
+                } else {
+                    // TODO: 1) Send a message with the updated info
+                    // 2) Resend original message (which is ctx)
+                    debug!("TODO: Actually update + send message");
+                    Ok(vec![])
+                }
+            }
             NodeDuty::NoOp => Ok(vec![]),
         }
     }
@@ -396,7 +413,7 @@ impl Node {
         if let Some(chunks) = &mut self.chunks {
             Ok(chunks)
         } else {
-            Err(Error::NoChunks)
+            Err(Error::NoImmutableChunks)
         }
     }
 
@@ -404,7 +421,7 @@ impl Node {
         if let Some(meta_data) = &mut self.meta_data {
             Ok(meta_data)
         } else {
-            Err(Error::NoMetadata)
+            Err(Error::NoSectionMetaData)
         }
     }
 
