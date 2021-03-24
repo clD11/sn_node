@@ -75,7 +75,7 @@ pub async fn map_routing_event(event: RoutingEvent, network_api: &Network) -> Ma
             match msg {
                 Message::Process(process_msg) => map_node_msg(process_msg, src, dst),
                 Message::ProcessingError(error) => {
-                    warn!("TODO: Processing error received. This should be handled via the LazyMessaging pattern");
+                    warn!("Processing error received. {:?}", error);
                     Mapping::Error(LazyError {
                         msg: MsgContext::Error {
                             msg: error.clone(),
@@ -93,7 +93,7 @@ pub async fn map_routing_event(event: RoutingEvent, network_api: &Network) -> Ma
                 user,
             ),
             Message::ProcessingError(error) => {
-                warn!("TODO: Processing error received. This should be handled via the LazyMessaging pattern");
+                warn!("Processing error received. {:?}", error);
                 Mapping::Error(LazyError {
                     msg: MsgContext::Error {
                         msg: error.clone(),
