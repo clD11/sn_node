@@ -20,6 +20,7 @@ use sn_messaging::{
     Aggregation, DstLocation, EndUser, MessageId, SrcLocation,
 };
 use sn_routing::{NodeElderChange, Prefix};
+use sn_transfers::WalletReplica;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Formatter},
