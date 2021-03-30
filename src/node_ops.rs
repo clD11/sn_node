@@ -16,7 +16,9 @@ use sn_data_types::{
     WalletHistory,
 };
 use sn_messaging::{
-    client::{BlobRead, BlobWrite, Message, NodeSystemCmd, ProcessMsg, ProcessingError},
+    client::{
+        BlobRead, BlobWrite, Message, NodeSystemCmd, ProcessMsg, ProcessingError, SupportingInfo,
+    },
     Aggregation, DstLocation, EndUser, MessageId, SrcLocation,
 };
 use sn_routing::{NodeElderChange, Prefix};
@@ -175,6 +177,9 @@ pub enum NodeDuty {
     /// Send a lazy error as a result of a specfic message.
     /// The aim here is for the sender to respond with any missing state
     SendError(OutgoingLazyError),
+    /// Send supporting infor for a given processing error.
+    /// Theis should be any missing state required to proceed at the erroring node.
+    SendSupport(OutgoingSupportingInfo),
     /// Send the same request to each individual node.
     SendToNodes {
         targets: BTreeSet<XorName>,
@@ -221,7 +226,7 @@ pub enum NodeDuty {
     },
     /// Send section history to erroring node.
     /// This should also trigger resending of the original message.
-    UpdateErroringNodeSectionState,
+    ProvideSectionWalletSupportingInfo,
     NoOp,
 }
 
@@ -269,6 +274,7 @@ impl Debug for NodeDuty {
             Self::SetNodeJoinsAllowed(_) => write!(f, "SetNodeJoinsAllowed"),
             Self::Send(msg) => write!(f, "Send [ msg: {:?} ]", msg),
             Self::SendError(msg) => write!(f, "SendError [ msg: {:?} ]", msg),
+            Self::SendSupport(msg) => write!(f, "SendSupport [ msg: {:?} ]", msg),
             Self::SendToNodes { targets, msg } => {
                 write!(f, "SendToNodes [ targets: {:?}, msg: {:?} ]", targets, msg)
             }
@@ -278,7 +284,7 @@ impl Debug for NodeDuty {
             Self::ReplicateChunk { .. } => write!(f, "ReplicateChunk"),
             Self::GetChunkForReplication { .. } => write!(f, "GetChunkForReplication"),
             Self::StoreChunkForReplication { .. } => write!(f, "StoreChunkForReplication"),
-            Self::UpdateErroringNodeSectionState { .. } => {
+            Self::ProvideSectionWalletSupportingInfo { .. } => {
                 write!(f, "UpdateErroringNodeSectionState")
             }
         }
@@ -301,6 +307,12 @@ pub struct OutgoingLazyError {
     pub dst: DstLocation,
 }
 
+#[derive(Debug, Clone)]
+pub struct OutgoingSupportingInfo {
+    pub msg: SupportingInfo,
+    pub dst: DstLocation,
+}
+
 impl OutgoingMsg {
     pub fn id(&self) -> MessageId {
         self.msg.id()
@@ -309,6 +321,12 @@ impl OutgoingMsg {
 
 impl OutgoingLazyError {
     pub fn id(&self) -> MessageId {
-        self.msg.id
+        self.msg.id()
+    }
+}
+
+impl OutgoingSupportingInfo {
+    pub fn id(&self) -> MessageId {
+        self.msg.id()
     }
 }
