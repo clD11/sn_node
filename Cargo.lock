@@ -2295,9 +2295,8 @@ dependencies = [
 
 [[package]]
 name = "sn_messaging"
-version = "12.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77b2983ae0c66e9289efd0d085cd356b5cb37ab941f6e42b6901fb417c737bf6"
+version = "13.1.0"
+source = "git+https://github.com/maidsafe/sn_messaging?branch=anti-entropy#4badf0a79931e79c03ff0a2dae0e2adc8b98e2a0"
 dependencies = [
  "bincode",
  "bytes 1.0.1",
@@ -2351,7 +2350,7 @@ dependencies = [
  "signature",
  "sn_data_types 0.18.0",
  "sn_launch_tool",
- "sn_messaging 12.0.0",
+ "sn_messaging 13.1.0",
  "sn_routing",
  "sn_transfers",
  "structopt",
